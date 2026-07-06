@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     # Ollama (local LLM)
     ollama_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3.1:8b"
+    ollama_model: str = "qwen2.5:7b-instruct"
 
     # Feature engineering
     window_minutes: int = 10
