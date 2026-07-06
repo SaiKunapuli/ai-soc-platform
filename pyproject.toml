@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aisoc"
+version = "0.1.0"
+description = "AI-powered SOC platform: ML anomaly detection + local-LLM incident-response copilot on a Wazuh base"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7",
+    "pydantic-settings>=2.2",
+    "pandas>=2.2",
+    "scikit-learn>=1.4",
+    "joblib>=1.3",
+    "opensearch-py>=2.4",
+    "fastapi>=0.111",
+    "uvicorn>=0.29",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.4"]
+deep = ["torch>=2.2"]          # autoencoder (Phase 6)
+dashboard = ["streamlit>=1.34"] # Phase 5
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

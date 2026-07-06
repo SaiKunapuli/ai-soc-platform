@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Env / secrets — never commit indexer credentials
+.env
+
+# Data & models (large / machine-specific)
+data/
+models/*.joblib
+models/*.pt
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+
+# OS / editor
+Thumbs.db
+.DS_Store
+.vscode/
