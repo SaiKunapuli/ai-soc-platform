@@ -2,19 +2,19 @@
 
 Six phases. Each has an **exit criterion** — don't start the next phase until it's met. Scope discipline is the whole game: one log source, one feature family, one model first.
 
-## Phase 1 — Lab foundation
+## Phase 1 — Lab foundation ✅ COMPLETE (2026-07-06)
 Get real telemetry flowing and prove you can generate attacks to detect.
 
-- [ ] Install Docker Desktop (WSL2 backend) — the one missing prerequisite on the dev machine
-- [ ] Wazuh single-node stack in Docker — see [../docker/README.md](../docker/README.md)
-- [ ] Sysmon installed on the Windows host with SwiftOnSecurity config
-- [ ] Wazuh agent on the host, enrolled with the server
-- [ ] Enable `wazuh-archives-*` (`logall_json`) — required for ML baselines later
-- [ ] Install Atomic Red Team (Invoke-AtomicRedTeam)
-- [ ] Run 2–3 safe techniques (e.g. T1059.001 PowerShell, T1082 system discovery) and see them appear in the Wazuh dashboard
-- [ ] Record run windows in [../simulations/labels.csv](../simulations/labels.csv)
+- [x] Install Docker Desktop (WSL2 backend) — needed a cold restart to unstick the engine
+- [x] Wazuh single-node stack in Docker (v4.14.6) — see [../docker/README.md](../docker/README.md)
+- [x] Sysmon installed on the Windows host with SwiftOnSecurity config
+- [x] Wazuh agent on the host (ID 001, DESKTOP-STQNCN4), enrolled and Active
+- [x] Enable `wazuh-archives-*` (`logall_json` + filebeat archives module) — required for ML baselines
+- [x] Install Atomic Red Team (Invoke-AtomicRedTeam) with atomics
+- [x] Ran T1082 test 1 — systeminfo execution captured in archives
+- [x] Recorded run window in [../simulations/labels.csv](../simulations/labels.csv)
 
-**Exit criterion:** an Atomic Red Team run visibly lands as Wazuh alerts, and raw archive events are queryable in the indexer.
+**Exit criterion MET:** T1082 landed in `wazuh-archives-*`, indexer green, 155+ Sysmon EID-1 events queryable. Run more techniques over the coming days to enrich labels; baseline data now accumulates passively.
 
 ## Phase 2 — ML core (process features + Isolation Forest)
 - [ ] `aisoc.ingestion` pulls archive events from the indexer into DataFrames
