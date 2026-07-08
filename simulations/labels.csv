@@ -1,2 +1,3 @@
 start_utc,end_utc,host,technique_id,test_number,notes
 2026-07-06T22:02:49Z,2026-07-06T22:02:53Z,DESKTOP-STQNCN4,T1082,1,System Information Discovery - first end-to-end lab validation
+2026-07-07T02:40:08Z,2026-07-07T02:40:12Z,DESKTOP-STQNCN4,T1059.001,manual,benign encoded PowerShell + discovery burst

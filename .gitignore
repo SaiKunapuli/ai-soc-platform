@@ -15,6 +15,9 @@ data/
 models/*.joblib
 models/*.pt
 
+# Scratch copilot output from comparison runs
+scratch_reports/
+
 # Notebooks
 .ipynb_checkpoints/
 
