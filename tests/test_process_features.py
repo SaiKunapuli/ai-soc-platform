@@ -66,12 +66,15 @@ def test_quiet_window_is_quiet(features: pd.DataFrame) -> None:
 
 
 def test_attack_window_features(features: pd.DataFrame) -> None:
-    noisy = features.iloc[1]
+    quiet, noisy = features.iloc[0], features.iloc[1]
     assert noisy["ps_count"] == 4  # powershell + 3x cmd
     assert noisy["encoded_cmd"] == 1
     assert noisy["new_parent_child"] >= 2  # word->powershell, powershell->cmd
     assert noisy["burst_rate"] == 3  # three cmds within minute 10:12
-    assert noisy["rare_proc_score"] > features.iloc[0]["rare_proc_score"]
+    assert noisy["rare_proc_score"] > quiet["rare_proc_score"]
+    # obfuscation discriminators: the encoded payload spikes entropy and length
+    assert noisy["max_cmd_entropy"] > quiet["max_cmd_entropy"]
+    assert noisy["max_cmd_len"] > quiet["max_cmd_len"]
 
 
 def test_label_windows_marks_only_the_attack(features: pd.DataFrame) -> None:

@@ -5,9 +5,15 @@ Phase 2's one and only feature family. Per (host, window):
 - proc_count            total process creations
 - ps_count              script-host launches (PowerShell/cmd/wscript/mshta)
 - encoded_cmd           command lines with -enc flags or high-entropy args
+- max_cmd_entropy       highest command-line Shannon entropy (base64/obfuscation spikes)
+- max_cmd_len           longest command line (encoded payloads are long)
 - rare_proc_score       mean rarity of image names vs. this host's history
 - new_parent_child      never-before-seen parent->child image pairs
 - burst_rate            max creations in any 1-min sub-bucket (detects tool spray)
+
+max_cmd_entropy / max_cmd_len are continuous discriminators for obfuscated
+commands: a single encoded PowerShell payload is diluted as a count, but its
+entropy and length are strong per-window maxima.
 """
 
 import math
@@ -32,6 +38,8 @@ FEATURE_COLUMNS = [
     "proc_count",
     "ps_count",
     "encoded_cmd",
+    "max_cmd_entropy",
+    "max_cmd_len",
     "rare_proc_score",
     "new_parent_child",
     "burst_rate",
@@ -65,11 +73,12 @@ def extract(process_events: pd.DataFrame) -> pd.DataFrame:
     events["parent_name"] = events[COL_PARENT].str.lower().str.split("\\").str[-1]
     events["is_script_host"] = events["image_name"].isin(SCRIPT_HOSTS)
 
+    events["cmd_entropy"] = events[COL_CMDLINE].map(command_line_entropy)
+    events["cmd_len"] = events[COL_CMDLINE].str.len().astype(float)
     has_flag = events[COL_CMDLINE].str.lower().map(
         lambda c: any(flag in c for flag in ENCODED_FLAGS)
     )
-    high_entropy = events[COL_CMDLINE].map(command_line_entropy) > ENTROPY_THRESHOLD
-    events["is_encoded"] = has_flag | high_entropy
+    events["is_encoded"] = has_flag | (events["cmd_entropy"] > ENTROPY_THRESHOLD)
 
     # Rarity of an image on its host: ~1 for a singleton, 0 for the host's most common image
     image_counts = events.groupby([COL_HOST, "image_name"])[COL_HOST].transform("size")
@@ -91,6 +100,8 @@ def extract(process_events: pd.DataFrame) -> pd.DataFrame:
             "proc_count": grouped.size(),
             "ps_count": grouped["is_script_host"].sum(),
             "encoded_cmd": grouped["is_encoded"].sum(),
+            "max_cmd_entropy": grouped["cmd_entropy"].max(),
+            "max_cmd_len": grouped["cmd_len"].max(),
             "rare_proc_score": grouped["rarity"].mean(),
             "new_parent_child": grouped["is_new_pair"].sum(),
             "burst_rate": burst,

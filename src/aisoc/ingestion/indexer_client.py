@@ -30,6 +30,17 @@ class IndexerClient:
     def ping(self) -> bool:
         return self._client.ping()
 
+    def raw_search(self, index: str, body: dict) -> dict:
+        """Run a raw query (e.g. aggregations) and return the full response."""
+        return self._client.search(index=index, body=body)
+
+    def cluster_status(self) -> str:
+        """green / yellow / red, or 'unknown' if unreachable."""
+        try:
+            return self._client.cluster.health()["status"]
+        except Exception:
+            return "unknown"
+
     def fetch_events(
         self,
         index: str,
@@ -64,6 +75,25 @@ class IndexerClient:
             }
         }
         return self.fetch_events(ARCHIVES_INDEX, start, end, query=query)
+
+    def _fetch_sysmon_eid(self, eid: str, start: datetime, end: datetime) -> pd.DataFrame:
+        query = {
+            "bool": {
+                "must": [
+                    {"match": {"data.win.system.channel": "Microsoft-Windows-Sysmon/Operational"}},
+                    {"term": {"data.win.system.eventID": eid}},
+                ]
+            }
+        }
+        return self.fetch_events(ARCHIVES_INDEX, start, end, query=query)
+
+    def fetch_sysmon_network_events(self, start: datetime, end: datetime) -> pd.DataFrame:
+        """Sysmon Event ID 3 (network connection) from the archives."""
+        return self._fetch_sysmon_eid("3", start, end)
+
+    def fetch_sysmon_dns_events(self, start: datetime, end: datetime) -> pd.DataFrame:
+        """Sysmon Event ID 22 (DNS query) from the archives."""
+        return self._fetch_sysmon_eid("22", start, end)
 
     def fetch_rule_alerts(self, start: datetime, end: datetime, min_level: int = 5) -> pd.DataFrame:
         """Wazuh rule alerts for the enrichment layer (level >= min_level)."""

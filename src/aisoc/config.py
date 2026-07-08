@@ -13,9 +13,13 @@ class Settings(BaseSettings):
     # Lab uses self-signed certs; never disable verification outside the lab
     indexer_verify_certs: bool = False
 
-    # Ollama (local LLM)
+    # Ollama (local LLM). The single active model — 7b for dev/iteration,
+    # set AISOC_OLLAMA_MODEL=qwen2.5:14b-instruct in .env for the demo.
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b-instruct"
+
+    # API backend (consumed by the dashboard)
+    api_base_url: str = "http://localhost:8000"
 
     # Feature engineering
     window_minutes: int = 10

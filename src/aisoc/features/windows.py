@@ -40,19 +40,22 @@ def label_windows(
 ) -> pd.Series:
     """Mark feature windows that overlap an Atomic Red Team run (simulations/labels.csv).
 
-    Ground truth for evaluation: True where [window_start, window_start + window)
-    overlaps any label's [start_utc - pad, end_utc + pad]. Pad absorbs event-timestamp
-    lag. Time-overlap only — sufficient for the single-host lab; add host matching
-    when a second endpoint exists.
+    Ground truth for evaluation: True where the window overlaps a label's observable
+    footprint [start_utc - 5s, end_utc + pad]. Padding is asymmetric on purpose —
+    Sysmon/indexing lag lands events slightly AFTER execution, so we pad the end by
+    `pad_seconds` but the start by only a small clock-skew tolerance. Padding the
+    start backward by a full minute wrongly bleeds a boundary attack into the prior
+    window. Time-overlap only — add host matching when a second endpoint exists.
     """
     window = window_minutes or settings.window_minutes
     window_start = pd.to_datetime(features["window_start"], utc=True)
     window_end = window_start + pd.Timedelta(minutes=window)
-    pad = pd.Timedelta(seconds=pad_seconds)
+    back_pad = pd.Timedelta(seconds=5)          # clock-skew tolerance only
+    fwd_pad = pd.Timedelta(seconds=pad_seconds)  # event/indexing lag
 
     is_attack = pd.Series(False, index=features.index)
     for _, label in labels.iterrows():
-        start = pd.to_datetime(label["start_utc"], utc=True) - pad
-        end = pd.to_datetime(label["end_utc"], utc=True) + pad
+        start = pd.to_datetime(label["start_utc"], utc=True) - back_pad
+        end = pd.to_datetime(label["end_utc"], utc=True) + fwd_pad
         is_attack |= (window_start < end) & (window_end > start)
     return is_attack
