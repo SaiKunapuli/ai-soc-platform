@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI SOC Platform — Mission Control</title>
+<style>
+  :root {
+    --bg: #08080a; --panel: #101013; --panel-2: #16161a; --panel-3: #1b1b20;
+    --border: #2a2a31; --border-soft: #1d1d22; --grid: #141418;
+    --text: #eaeaee; --muted: #8a8a93; --faint: #565660; --accent: #e6e6ea;
+    --crit: #f5f5f7; --high: #c2c2c8; --med: #8c8c95; --low: #61616a;
+    --ok: #d8d8dc; --down: #4a4a52;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    --sans: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 13px;
+    -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  }
+  /* scanline / CRT overlay */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,0.014) 0 1px, transparent 1px 3px);
+  }
+  body::after {
+    content: ""; position: fixed; left: 0; right: 0; height: 140px; z-index: 9998; pointer-events: none;
+    background: linear-gradient(180deg, transparent, rgba(255,255,255,0.025), transparent);
+    animation: scan 7s linear infinite;
+  }
+  @keyframes scan { 0% { top: -140px; } 100% { top: 100%; } }
+
+  .app { padding: 12px 16px 24px; }
+  /* ---- header ---- */
+  header.top { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 12px; }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .brand .logo { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(140deg,#34343b,#16161a);
+    border: 1px solid var(--border); display: grid; place-items: center; font-size: 15px; }
+  .brand h1 { font-size: 14px; margin: 0; letter-spacing: 2px; font-weight: 700; }
+  .brand .sub { color: var(--faint); font-size: 10px; font-family: var(--mono); letter-spacing: 2px; margin-top: 2px; }
+  .hdr-right { display: flex; align-items: center; gap: 18px; }
+  .sensors { display: flex; gap: 14px; }
+  .led { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-family: var(--mono);
+    color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .led .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--down); }
+  .led.on .dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: blink 2s ease-in-out infinite; }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .clock { font-family: var(--mono); font-size: 15px; letter-spacing: 2px; color: var(--text); }
+
+  /* ---- panels ---- */
+  .panel { background: var(--panel); border: 1px solid var(--border-soft); border-radius: 10px; position: relative; }
+  .panel > .ph { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px;
+    border-bottom: 1px solid var(--border-soft); }
+  .ph .t { font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted); font-family: var(--mono); }
+  .ph .r { font-size: 10px; color: var(--faint); font-family: var(--mono); letter-spacing: 1px; }
+  .pb { padding: 12px; }
+
+  /* ---- KPI strip ---- */
+  .kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 10px; }
+  .kpi { padding: 11px 13px; }
+  .kpi .label { color: var(--muted); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; font-family: var(--mono); }
+  .kpi .num { font-size: 27px; font-weight: 680; margin-top: 5px; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+  .kpi .bar { height: 3px; border-radius: 3px; margin-top: 9px; background: var(--panel-3); overflow: hidden; }
+  .kpi .bar > i { display: block; height: 100%; background: var(--accent); transition: width .6s ease; }
+
+  /* ---- main grid ---- */
+  .grid { display: grid; grid-template-columns: 320px 1.15fr 1.25fr; gap: 10px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 10px; }
+  .section-sub { color: var(--faint); font-size: 10px; font-family: var(--mono); }
+
+  /* radar */
+  .radar-wrap { display: grid; place-items: center; padding: 6px 0 2px; position: relative; }
+  .radar { position: relative; width: 260px; height: 260px; }
+  .radar .sweep { position: absolute; inset: 0; border-radius: 50%; animation: spin 4.5s linear infinite;
+    background: conic-gradient(from 0deg, rgba(255,255,255,0) 0 250deg, rgba(255,255,255,0.05) 320deg, rgba(255,255,255,0.26) 358deg, rgba(255,255,255,0) 360deg); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .radar svg { position: absolute; inset: 0; }
+  .ring { fill: none; stroke: rgba(255,255,255,0.15); }
+  .ring.d { stroke-dasharray: 3 7; stroke: rgba(255,255,255,0.11); }
+  .cross { stroke: rgba(255,255,255,0.07); }
+  .blip { transform-box: fill-box; transform-origin: center; animation: pulse 2.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+  .core { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 108px; height: 108px;
+    border-radius: 50%; display: grid; place-items: center; text-align: center;
+    background: radial-gradient(circle at 50% 40%, rgba(255,255,255,0.09), rgba(8,8,10,0.75) 70%);
+    border: 1px solid rgba(255,255,255,0.3); box-shadow: inset 0 0 26px rgba(255,255,255,0.07); }
+  .core .st { font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: 1.5px; }
+  .core .ct { font-size: 10px; color: var(--muted); margin-top: 3px; font-family: var(--mono); }
+  .legend { display: flex; justify-content: center; gap: 13px; padding: 4px 0 10px; }
+  .legend span { font-size: 10px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+  /* event-rate bars */
+  .rate { display: flex; align-items: flex-end; gap: 2px; height: 70px; padding: 4px 0; }
+  .rate > i { flex: 1; background: linear-gradient(180deg, var(--high), var(--faint)); border-radius: 1px;
+    transition: height .5s ease; min-height: 1px; opacity: 0.85; }
+  .rate > i.now { background: var(--accent); box-shadow: 0 0 6px rgba(255,255,255,0.3); }
+
+  /* type bars */
+  .tbar { display: grid; grid-template-columns: 78px 1fr 44px; align-items: center; gap: 8px; margin: 7px 0; font-family: var(--mono); font-size: 11px; }
+  .tbar .lb { color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px; }
+  .tbar .track { height: 6px; background: var(--panel-3); border-radius: 4px; overflow: hidden; }
+  .tbar .track > i { display: block; height: 100%; background: var(--high); border-radius: 4px; transition: width .6s ease; }
+  .tbar .vl { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+
+  /* live feed */
+  .feed { max-height: 232px; overflow: hidden; }
+  .frow { display: grid; grid-template-columns: 62px 84px 1fr; gap: 8px; padding: 4px 2px; font-family: var(--mono);
+    font-size: 11px; border-bottom: 1px solid var(--border-soft); animation: feedin .45s ease; }
+  @keyframes feedin { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  .frow .ft { color: var(--faint); }
+  .frow .fk { color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .frow .fd { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* alerts */
+  .alist { display: flex; flex-direction: column; gap: 7px; }
+  .arow { display: grid; grid-template-columns: 58px 1fr auto; align-items: center; gap: 10px; padding: 10px 12px;
+    border-radius: 9px; border: 1px solid var(--border-soft); background: var(--panel-2); cursor: pointer; transition: .15s; }
+  .arow:hover { border-color: var(--border); background: var(--panel-3); }
+  .arow.active { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(230,230,234,0.2); }
+  .stag { font-size: 9px; font-weight: 800; letter-spacing: 0.5px; padding: 3px 6px; border-radius: 5px; text-transform: uppercase; text-align: center; font-family: var(--mono); }
+  .arow .beh { font-size: 12.5px; font-weight: 550; }
+  .arow .meta { font-size: 10.5px; color: var(--muted); margin-top: 2px; font-family: var(--mono); }
+  .arow .sc { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+  /* detail */
+  .beh { font-size: 15px; font-weight: 650; line-height: 1.35; }
+  .kv { display: flex; gap: 22px; margin: 12px 0 4px; flex-wrap: wrap; }
+  .kv .k { color: var(--faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-family: var(--mono); }
+  .kv .v { font-size: 14px; font-weight: 600; margin-top: 3px; }
+  .scorebar { height: 6px; border-radius: 6px; background: var(--panel-3); overflow: hidden; margin-top: 8px; }
+  .scorebar > i { display: block; height: 100%; border-radius: 6px; transition: width .6s ease; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { font-size: 11px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel-2); font-family: var(--mono); }
+  .chip.mitre { border-color: rgba(255,255,255,0.22); }
+  .subhead { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--faint); margin: 14px 0 7px; font-family: var(--mono); }
+  table.rules { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  table.rules td, table.rules th { text-align: left; padding: 6px 7px; border-bottom: 1px solid var(--border-soft); }
+  table.rules th { color: var(--faint); font-weight: 500; font-size: 10px; text-transform: uppercase; font-family: var(--mono); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; background: var(--accent); color: #0a0a0b;
+    border: none; border-radius: 9px; padding: 10px 16px; font-size: 12.5px; font-weight: 700; cursor: pointer; letter-spacing: 0.3px; }
+  .btn:hover { background: #f2f2f5; } .btn:disabled { opacity: 0.55; cursor: default; }
+  .report h4 { margin: 14px 0 5px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--accent); font-family: var(--mono); }
+  .report h4:first-child { margin-top: 4px; }
+  .report p { margin: 0 0 6px; line-height: 1.5; }
+  .report ol, .report ul { margin: 4px 0; padding-left: 18px; line-height: 1.5; } .report li { margin-bottom: 3px; }
+  .empty { color: var(--faint); font-size: 12px; display: grid; place-items: center; min-height: 130px; text-align: center; font-family: var(--mono); }
+  .banner { padding: 9px 11px; border-radius: 8px; font-size: 12px; margin-top: 10px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
+  .banner.err { color: var(--text); }
+  .spin { width: 14px; height: 14px; border: 2px solid rgba(10,10,11,0.35); border-top-color: #0a0a0b; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  .muted { color: var(--muted); }
+  @media (max-width: 1200px) { .grid { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(3,1fr); } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="logo">🛡️</div>
+      <div>
+        <h1>AI SOC PLATFORM</h1>
+        <div class="sub">MISSION CONTROL</div>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <div class="sensors" id="sensors">
+        <span class="led" id="led-collect"><span class="dot"></span>Collector</span>
+        <span class="led" id="led-index"><span class="dot"></span>Indexer</span>
+        <span class="led" id="led-model"><span class="dot"></span>Model</span>
+        <span class="led" id="led-copilot"><span class="dot"></span>Copilot</span>
+      </div>
+      <div class="clock" id="clock">--:--:--</div>
+    </div>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid">
+    <!-- LEFT: telemetry -->
+    <div class="col">
+      <div class="panel">
+        <div class="ph"><span class="t">Event Throughput</span><span class="r" id="rate-now">-- /min</span></div>
+        <div class="pb"><div class="rate" id="rate"></div>
+          <div class="section-sub" style="margin-top:4px">last 60 min &middot; live</div></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><span class="t">Telemetry Mix</span><span class="r">30 min</span></div>
+        <div class="pb" id="types"></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><span class="t">Sensor Grid</span><span class="r" id="freshness">--</span></div>
+        <div class="pb" id="sensorgrid" style="font-family:var(--mono);font-size:11px;color:var(--muted)"></div>
+      </div>
+    </div>
+
+    <!-- CENTER: radar + live stream -->
+    <div class="col">
+      <div class="panel">
+        <div class="ph"><span class="t">Threat Posture</span><span class="r" id="posture-r">SCANNING</span></div>
+        <div class="radar-wrap">
+          <div class="radar">
+            <div class="sweep"></div>
+            <svg viewBox="0 0 260 260" width="260" height="260">
+              <circle class="ring" cx="130" cy="130" r="122"></circle>
+              <circle class="ring d" cx="130" cy="130" r="88"></circle>
+              <circle class="ring d" cx="130" cy="130" r="54"></circle>
+              <line class="cross" x1="130" y1="8" x2="130" y2="252"></line>
+              <line class="cross" x1="8" y1="130" x2="252" y2="130"></line>
+              <g id="blips"></g>
+            </svg>
+            <div class="core" id="core"><div><div class="st" id="core-st">SECURE</div><div class="ct" id="core-ct">0 TRACKED</div></div></div>
+          </div>
+        </div>
+        <div class="legend">
+          <span><span class="dot" style="color:var(--crit)"></span>CRIT</span>
+          <span><span class="dot" style="color:var(--high)"></span>HIGH</span>
+          <span><span class="dot" style="color:var(--med)"></span>MED</span>
+          <span><span class="dot" style="color:var(--low)"></span>LOW</span>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="ph"><span class="t">Live Event Stream</span><span class="r" id="feed-r">--</span></div>
+        <div class="pb feed" id="feed"></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><span class="t">Active Alerts</span><span class="r" id="alert-r">0</span></div>
+        <div class="pb alist" id="alist"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: detail + report -->
+    <div class="col">
+      <div class="panel"><div class="ph"><span class="t">Alert Detail</span><span class="r" id="det-r">--</span></div>
+        <div class="pb" id="detail"><div class="empty">SELECT AN ALERT</div></div></div>
+      <div class="panel"><div class="ph"><span class="t">AI Incident Report</span><span class="r">copilot</span></div>
+        <div class="pb"><div id="report"><div class="empty">RUN ANALYSIS TO GENERATE REPORT</div></div></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SEV = { critical:{hex:"#f5f5f7",rank:0}, high:{hex:"#c2c2c8",rank:1}, medium:{hex:"#8c8c95",rank:2}, low:{hex:"#61616a",rank:3} };
+const sevHex = s => (SEV[s] && SEV[s].hex) || "#565660";
+let ALERTS = [], selectedId = null, kpiVals = {};
+
+function tick(){ document.getElementById("clock").textContent = new Date().toLocaleTimeString("en-GB"); }
+tick(); setInterval(tick, 1000);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- animated counter ---------- */
+function setNum(el, target){
+  const from = kpiVals[el.id] ?? 0; kpiVals[el.id] = target;
+  const t0 = performance.now(), dur = 550;
+  function step(t){ const p = Math.min(1,(t-t0)/dur); el.textContent = Math.round(from+(target-from)*p); if(p<1) requestAnimationFrame(step); }
+  requestAnimationFrame(step);
+}
+
+/* ---------- ALERTS ---------- */
+async function loadAlerts(){
+  try{
+    const r = await fetch("/alerts"); ALERTS = await r.json();
+    ALERTS.sort((a,b)=>(SEV[a.severity]?.rank??9)-(SEV[b.severity]?.rank??9));
+    renderKPIs(); renderRadar(); renderAlerts();
+    if(!selectedId && ALERTS.length) selectAlert(ALERTS[0].alert_id);
+  }catch(e){ document.getElementById("alist").innerHTML = `<div class="banner err">API unreachable (${esc(e.message)})</div>`; }
+}
+function counts(){ const c={critical:0,high:0,medium:0,low:0}; ALERTS.forEach(a=>{if(c[a.severity]!==undefined)c[a.severity]++;}); return c; }
+function renderKPIs(){
+  const c = counts();
+  const cards = [["ALERTS",ALERTS.length,"var(--accent)"],["CRITICAL",c.critical,sevHex("critical")],
+    ["HIGH",c.high,sevHex("high")],["MEDIUM",c.medium,sevHex("medium")],["LOW",c.low,sevHex("low")],
+    ["EVENTS/MIN",window._epm??0,"var(--high)"]];
+  const el = document.getElementById("kpis");
+  if(el.children.length !== cards.length){
+    el.innerHTML = cards.map((k,i)=>`<div class="panel kpi"><div class="label">${k[0]}</div>
+      <div class="num" id="kn${i}">0</div><div class="bar"><i id="kb${i}" style="background:${k[2]};width:0%"></i></div></div>`).join("");
+  }
+  const maxv = Math.max(1, ...cards.map(k=>k[1]));
+  cards.forEach((k,i)=>{ setNum(document.getElementById("kn"+i), k[1]);
+    document.getElementById("kb"+i).style.width = Math.round(k[1]/maxv*100)+"%"; });
+  document.getElementById("alert-r").textContent = ALERTS.length;
+}
+function posture(){ const c=counts();
+  if(c.critical) return{s:"CRITICAL",h:sevHex("critical")}; if(c.high) return{s:"ELEVATED",h:sevHex("high")};
+  if(c.medium) return{s:"GUARDED",h:sevHex("medium")}; return{s:"SECURE",h:sevHex("low")}; }
+function renderRadar(){
+  const p = posture();
+  core_st.textContent=p.s; core_st.style.color=p.h; core_ct.textContent=ALERTS.length+" TRACKED";
+  document.getElementById("core").style.borderColor=p.h;
+  document.getElementById("posture-r").textContent=p.s;
+  const cx=130,cy=130;
+  document.getElementById("blips").innerHTML = ALERTS.map((a,i)=>{
+    const rank=SEV[a.severity]?.rank??3, rad=34+rank*28, ang=i*137.5*Math.PI/180;
+    const x=cx+rad*Math.cos(ang), y=cy+rad*Math.sin(ang), col=sevHex(a.severity);
+    return `<circle class="blip" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="${col}" style="filter:drop-shadow(0 0 6px ${col});animation-delay:${(i*0.3).toFixed(1)}s"></circle>`;
+  }).join("");
+}
+function renderAlerts(){
+  const el=document.getElementById("alist");
+  if(!ALERTS.length){ el.innerHTML=`<div class="empty">NO ACTIVE ALERTS</div>`; return; }
+  el.innerHTML = ALERTS.map(a=>{ const col=sevHex(a.severity), sc=a.ml?a.ml.anomaly_score.toFixed(2):"—";
+    return `<div class="arow ${a.alert_id===selectedId?"active":""}" onclick="selectAlert('${a.alert_id}')">
+      <span class="stag" style="background:${col}20;color:${col}">${a.severity||"n/a"}</span>
+      <div><div class="beh">${esc(a.detected_behavior)}</div><div class="meta">${a.host}${a.user?" · "+a.user:""}</div></div>
+      <div class="sc">${sc}</div></div>`; }).join("");
+}
+function selectAlert(id){
+  selectedId=id; renderAlerts();
+  const a=ALERTS.find(x=>x.alert_id===id); if(!a) return;
+  const col=sevHex(a.severity), score=a.ml?a.ml.anomaly_score:0;
+  const pct=a.ml&&a.ml.baseline_percentile!=null?`${a.ml.baseline_percentile.toFixed(0)}th pct`:"";
+  const mitre=(a.mitre||[]).map(t=>`<span class="chip mitre">${t.technique_id}${t.name?" · "+t.name:""}</span>`).join("");
+  const rules=(a.rule_alerts||[]).map(r=>`<tr><td>${r.rule_id}</td><td>${r.level}</td><td>${esc(r.description)}</td></tr>`).join("");
+  document.getElementById("det-r").textContent=(a.severity||"").toUpperCase();
+  document.getElementById("detail").innerHTML=`
+    <div class="beh">${esc(a.detected_behavior)}</div>
+    <div class="kv">
+      <div><div class="k">Severity</div><div class="v" style="color:${col}">${(a.severity||"n/a").toUpperCase()}</div></div>
+      <div><div class="k">Host</div><div class="v">${a.host}</div></div>
+      <div><div class="k">User</div><div class="v">${a.user||"n/a"}</div></div>
+      ${a.ml?`<div><div class="k">Anomaly</div><div class="v">${score.toFixed(2)} <span class="muted" style="font-size:11px">${pct}</span></div></div>`:""}
+    </div>
+    ${a.ml?`<div class="scorebar"><i style="width:${Math.round(score*100)}%;background:${col}"></i></div>`:""}
+    ${mitre?`<div class="subhead">MITRE ATT&CK</div><div class="chips">${mitre}</div>`:""}
+    ${rules?`<div class="subhead">Wazuh Rule Alerts</div><table class="rules"><tr><th>Rule</th><th>Lv</th><th>Description</th></tr>${rules}</table>`:""}
+    <button class="btn" id="ab" onclick="analyze('${a.alert_id}')">⚡ RUN AI ANALYSIS</button>`;
+  document.getElementById("report").innerHTML=`<div class="empty">RUN ANALYSIS TO GENERATE REPORT</div>`;
+}
+async function analyze(id){
+  const b=document.getElementById("ab"), area=document.getElementById("report");
+  b.disabled=true; b.innerHTML=`<span class="spin"></span> ANALYZING…`;
+  area.innerHTML=`<div class="empty">RUNNING LOCAL LLM…</div>`;
+  try{
+    const r=await fetch(`/alerts/${id}/analyze`,{method:"POST"}); const d=await r.json();
+    if(!r.ok) throw new Error(d.detail||("HTTP "+r.status));
+    const col=sevHex(d.severity);
+    const iocs=(d.iocs||[]).map(i=>`<span class="chip">${esc(i)}</span>`).join("");
+    const steps=(d.investigation_steps||[]).map(s=>`<li>${esc(s)}</li>`).join("");
+    const cont=(d.containment_recommendations||[]).map(s=>`<li>${esc(s)}</li>`).join("");
+    area.innerHTML=`<div class="report">
+      <div style="display:flex;align-items:center;gap:9px"><span class="stag" style="background:${col}20;color:${col};font-size:11px">${d.severity}</span>
+        <span class="muted" style="font-size:12px">${esc(d.severity_rationale||"")}</span></div>
+      <h4>What happened</h4><p>${esc(d.explanation)}</p>
+      <h4>Likely scenario</h4><p>${esc(d.attack_interpretation)}</p>
+      <h4>Investigation</h4><ol>${steps}</ol><h4>Containment</h4><ul>${cont}</ul>
+      ${iocs?`<h4>Indicators</h4><div class="chips">${iocs}</div>`:""}</div>`;
+  }catch(e){ area.innerHTML=`<div class="banner err">Analysis failed — ${esc(String(e.message))}</div>`; }
+  finally{ b.disabled=false; b.innerHTML="⚡ RE-RUN AI ANALYSIS"; }
+}
+
+/* ---------- STATS (live telemetry) ---------- */
+function led(id, on){ document.getElementById(id).classList.toggle("on", !!on); }
+let lastFeedKey = "";
+async function loadStats(){
+  let s; try{ s = await (await fetch("/stats")).json(); }catch(e){ return; }
+  // event rate bars
+  const epm = s.events_per_min||[]; window._epm = epm.length?epm[epm.length-1]:0;
+  const mx = Math.max(1, ...epm);
+  document.getElementById("rate").innerHTML = epm.map((v,i)=>`<i class="${i===epm.length-1?'now':''}" style="height:${Math.max(2,Math.round(v/mx*66))}px"></i>`).join("");
+  document.getElementById("rate-now").textContent = window._epm+" /min";
+  // type bars
+  const types=s.event_types||{}, tmax=Math.max(1,...Object.values(types));
+  const order=["process","network","dns","file","registry","remotethread"];
+  const keys=order.filter(k=>k in types).concat(Object.keys(types).filter(k=>!order.includes(k)));
+  document.getElementById("types").innerHTML = keys.slice(0,6).map(k=>`
+    <div class="tbar"><span class="lb">${k}</span><span class="track"><i style="width:${Math.round(types[k]/tmax*100)}%"></i></span><span class="vl">${types[k]}</span></div>`).join("");
+  // sensors
+  led("led-collect", s.collecting); led("led-index", s.indexer_status==="green"||s.indexer_status==="yellow");
+  led("led-model", s.model && s.model.trained);
+  document.getElementById("freshness").textContent = s.last_event_sec!=null?`${s.last_event_sec}s ago`:"--";
+  document.getElementById("sensorgrid").innerHTML = [
+    ["COLLECTOR", s.collecting?"ONLINE":"OFFLINE"], ["INDEXER", (s.indexer_status||"?").toUpperCase()],
+    ["MODEL", s.model&&s.model.trained?"LOADED":"NONE"], ["LAST EVENT", s.last_event_sec!=null?s.last_event_sec+"s":"--"],
+  ].map(x=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border-soft)"><span>${x[0]}</span><span style="color:var(--text)">${x[1]}</span></div>`).join("");
+  // live feed
+  const feed=s.feed||[]; const key=feed.map(f=>f.time+f.detail).join("|");
+  if(key!==lastFeedKey){ lastFeedKey=key;
+    document.getElementById("feed").innerHTML = feed.map(f=>`<div class="frow"><span class="ft">${f.time}</span><span class="fk">${f.type}</span><span class="fd">${esc(f.detail)}</span></div>`).join("");
+    document.getElementById("feed-r").textContent = feed.length+" evt";
+  }
+}
+
+loadAlerts(); loadStats();
+setInterval(loadAlerts, 15000);
+setInterval(loadStats, 4000);
+</script>
+</body>
+</html>
