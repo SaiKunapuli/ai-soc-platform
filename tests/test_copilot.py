@@ -41,6 +41,16 @@ def test_grounding_drops_hallucinated_iocs() -> None:
     result = analyst.analyze(alert, llm=llm)
     assert "DESKTOP-STQNCN4" in result.iocs  # real, kept
     assert "8.8.8.8" not in result.iocs  # invented, dropped
+    # deterministic extraction guarantees these regardless of what the model says
+    assert "srikar" in result.iocs  # host user
+    assert "92052" in result.iocs  # triggering rule id
+    assert "WINWORD.EXE" in result.iocs  # process named in the behavior summary
+
+
+def test_iocs_reliable_even_when_model_returns_none() -> None:
+    alert = sample_encoded_powershell_alert()
+    result = analyst.analyze(alert, llm=StubLLM(_analysis_dict(iocs=[])))
+    assert {"DESKTOP-STQNCN4", "srikar", "92052"} <= set(result.iocs)
 
 
 def test_report_assembles_all_sections() -> None:

@@ -24,7 +24,7 @@ def main() -> None:
     analysis = analyst.analyze(alert, llm=llm)
     t1 = time.perf_counter()
     print(f"--- analysis in {t1 - t0:.1f}s ---")
-    print(f"severity: {analysis.severity.value} — {analysis.severity_rationale}")
+    print(f"severity: {analysis.severity.value} - {analysis.severity_rationale}")
     print(f"iocs (grounded): {analysis.iocs}\n")
 
     incident = report.generate(alert, analysis, llm=llm)

@@ -1,8 +1,12 @@
-"""LLM analysis of an EnrichedAlert, with IOC grounding validation."""
+"""LLM analysis of an EnrichedAlert, with IOC grounding + deterministic extraction."""
+
+import re
 
 from aisoc.copilot import prompts
 from aisoc.copilot.llm import LLMClient
 from aisoc.enrichment.schemas import CopilotAnalysis, EnrichedAlert
+
+_EXE_RE = re.compile(r"[\w.-]+\.exe", re.IGNORECASE)
 
 
 def analyze(alert: EnrichedAlert, llm: LLMClient | None = None) -> CopilotAnalysis:
@@ -14,16 +18,34 @@ def analyze(alert: EnrichedAlert, llm: LLMClient | None = None) -> CopilotAnalys
         schema=CopilotAnalysis.model_json_schema(),
     )
     analysis = CopilotAnalysis.model_validate(raw)
-    return _ground_iocs(analysis, alert)
+    return analysis.model_copy(update={"iocs": _resolve_iocs(analysis, alert)})
 
 
-def _ground_iocs(analysis: CopilotAnalysis, alert: EnrichedAlert) -> CopilotAnalysis:
-    """Drop any IOC the model cited that does not appear in the input alert.
+def _alert_iocs(alert: EnrichedAlert) -> list[str]:
+    """Indicators pulled straight from the alert structure — always reliable,
+    never dependent on the model. Host, user, triggering rule IDs, and any
+    process image names named in the behavior summary.
+    """
+    values = [alert.host]
+    if alert.user:
+        values.append(alert.user)
+    values += [ra.rule_id for ra in alert.rule_alerts]
+    values += _EXE_RE.findall(alert.detected_behavior)
+    out: list[str] = []
+    for v in values:
+        if v and v not in out:
+            out.append(v)
+    return out
 
-    Hallucinated indicators in a SOC tool are worse than none. Membership test is
-    a substring check against the serialized alert — coarse but safe in the
-    conservative direction (can only drop, never add).
+
+def _resolve_iocs(analysis: CopilotAnalysis, alert: EnrichedAlert) -> list[str]:
+    """Deterministic alert IOCs, plus any model-cited IOC that is actually present
+    in the alert (grounding). Hallucinated indicators are dropped — in a SOC tool
+    a wrong IOC is worse than a missing one.
     """
     alert_text = alert.model_dump_json()
-    grounded = [ioc for ioc in analysis.iocs if ioc and ioc in alert_text]
-    return analysis.model_copy(update={"iocs": grounded})
+    resolved = _alert_iocs(alert)
+    for ioc in analysis.iocs:
+        if ioc and ioc in alert_text and ioc not in resolved:
+            resolved.append(ioc)
+    return resolved

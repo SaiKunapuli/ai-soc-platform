@@ -24,14 +24,14 @@ def _timeline(alert: EnrichedAlert) -> list[str]:
                 if alert.ml.baseline_percentile is not None else ""))
         )
     events.append((alert.window_end, "Detection window closes"))
-    return [f"- `{ts.isoformat()}` — {text}" for ts, text in sorted(events, key=lambda e: e[0])]
+    return [f"- `{ts.isoformat()}` - {text}" for ts, text in sorted(events, key=lambda e: e[0])]
 
 
 def _mitre_table(alert: EnrichedAlert) -> list[str]:
     if not alert.mitre:
         return ["_No MITRE techniques mapped._"]
     rows = ["| Technique | Name | Tactic |", "|---|---|---|"]
-    rows += [f"| {t.technique_id} | {t.name or '—'} | {t.tactic or '—'} |" for t in alert.mitre]
+    rows += [f"| {t.technique_id} | {t.name or '-'} | {t.tactic or '-'} |" for t in alert.mitre]
     return rows
 
 
@@ -42,11 +42,9 @@ def generate(
     llm = llm or LLMClient()
 
     summary = llm.generate_text(
-        system=prompts.REPORT_SYSTEM,
+        system=prompts.REPORT_SUMMARY_SYSTEM,
         prompt=(
-            f"Write a 2-3 sentence executive summary for this incident. "
             f"Host: {alert.host}. Behavior: {alert.detected_behavior}. "
-            f"Severity: {analysis.severity.value}. "
             f"Interpretation: {analysis.attack_interpretation}"
         ),
     ).strip()
@@ -57,11 +55,11 @@ def generate(
 
     markdown = "\n".join(
         [
-            f"# Incident Report — {title}",
+            f"# Incident Report - {title}",
             f"\n**Alert ID:** `{alert.alert_id}`  ",
             f"**Host:** {alert.host}  ",
             f"**User:** {alert.user or 'n/a'}  ",
-            f"**Severity:** {analysis.severity.value.upper()} — {analysis.severity_rationale}",
+            f"**Severity:** {analysis.severity.value.upper()} - {analysis.severity_rationale}",
             "\n## Summary\n",
             summary,
             "\n## Timeline\n",

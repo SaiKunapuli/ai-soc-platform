@@ -28,7 +28,7 @@ class LLMClient:
                 ],
                 "format": schema,
                 "stream": False,
-                "options": {"temperature": 0.2},
+                "options": {"temperature": 0.1},
             },
         )
         response.raise_for_status()
