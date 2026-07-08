@@ -13,6 +13,9 @@ FEATURE_TECHNIQUE_MAP: dict[str, MitreTechnique] = {
     "encoded_cmd": MitreTechnique(
         technique_id="T1059.001", name="PowerShell", tactic="Execution"
     ),
+    "max_cmd_entropy": MitreTechnique(
+        technique_id="T1027", name="Obfuscated Files or Information", tactic="Defense Evasion"
+    ),
     "ps_count": MitreTechnique(
         technique_id="T1059", name="Command and Scripting Interpreter", tactic="Execution"
     ),
@@ -27,6 +30,15 @@ FEATURE_TECHNIQUE_MAP: dict[str, MitreTechnique] = {
     ),
     "distinct_hosts": MitreTechnique(
         technique_id="T1021", name="Remote Services", tactic="Lateral Movement"
+    ),
+    "max_dns_entropy": MitreTechnique(
+        technique_id="T1568.002", name="Domain Generation Algorithms", tactic="Command and Control"
+    ),
+    "external_conn_count": MitreTechnique(
+        technique_id="T1071", name="Application Layer Protocol", tactic="Command and Control"
+    ),
+    "distinct_dest_ips": MitreTechnique(
+        technique_id="T1071", name="Application Layer Protocol", tactic="Command and Control"
     ),
 }
 
