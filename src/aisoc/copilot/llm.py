@@ -12,7 +12,7 @@ from aisoc.config import settings
 
 
 class LLMClient:
-    def __init__(self, model: str | None = None, timeout: float = 120.0) -> None:
+    def __init__(self, model: str | None = None, timeout: float = 300.0) -> None:
         self.model = model or settings.ollama_model
         self._http = httpx.Client(base_url=settings.ollama_url, timeout=timeout)
 

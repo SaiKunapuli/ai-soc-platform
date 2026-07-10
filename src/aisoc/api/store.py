@@ -43,6 +43,13 @@ class AlertStore:
                     analysis_json TEXT NOT NULL
                 )"""
             )
+            c.execute(
+                """CREATE TABLE IF NOT EXISTS feedback (
+                    alert_id TEXT PRIMARY KEY,
+                    verdict TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )"""
+            )
 
     def save_alert(self, alert: EnrichedAlert) -> None:
         with self._connect() as c:
@@ -86,3 +93,25 @@ class AlertStore:
                 "SELECT analysis_json FROM analyses WHERE alert_id=?", (alert_id,)
             ).fetchone()
         return CopilotAnalysis.model_validate_json(row["analysis_json"]) if row else None
+
+    def save_feedback(self, alert_id: str, verdict: str) -> None:
+        from datetime import datetime, timezone
+
+        with self._connect() as c:
+            c.execute(
+                "INSERT OR REPLACE INTO feedback VALUES (?,?,?)",
+                (alert_id, verdict, datetime.now(timezone.utc).isoformat()),
+            )
+
+    def get_feedback(self, alert_id: str) -> str | None:
+        with self._connect() as c:
+            row = c.execute(
+                "SELECT verdict FROM feedback WHERE alert_id=?", (alert_id,)
+            ).fetchone()
+        return row["verdict"] if row else None
+
+    def all_feedback(self) -> dict[str, str]:
+        """alert_id -> verdict for every alert with feedback (for the dashboard)."""
+        with self._connect() as c:
+            rows = c.execute("SELECT alert_id, verdict FROM feedback").fetchall()
+        return {r["alert_id"]: r["verdict"] for r in rows}

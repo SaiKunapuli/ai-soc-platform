@@ -42,6 +42,22 @@ def health() -> dict:
     return {"status": "ok", "version": __version__}
 
 
+@app.get("/copilot/health")
+def copilot_health() -> dict:
+    """Check if Ollama is reachable and the model is available."""
+    import httpx
+    from aisoc.config import settings
+    try:
+        r = httpx.get(f"{settings.ollama_url}/api/tags", timeout=5)
+        if r.status_code == 200:
+            models = [m["name"] for m in r.json().get("models", [])]
+            available = any(settings.ollama_model.split(":")[0] in m for m in models)
+            return {"online": True, "model": settings.ollama_model, "available": available}
+        return {"online": False, "error": f"HTTP {r.status_code}"}
+    except Exception as exc:
+        return {"online": False, "error": str(exc)}
+
+
 @app.get("/stats")
 def stats() -> dict:
     """Live telemetry for the dashboard (event rates, type mix, feed, health)."""
@@ -62,6 +78,29 @@ def get_alert(alert_id: str) -> EnrichedAlert:
     if alert is None:
         raise HTTPException(status_code=404, detail="alert not found")
     return alert
+
+
+VERDICTS = {"true_positive", "false_positive", "benign"}
+
+
+@app.get("/feedback")
+def all_feedback() -> dict:
+    """Map of alert_id -> analyst verdict, for the dashboard."""
+    return store.all_feedback()
+
+
+@app.post("/alerts/{alert_id}/feedback")
+def submit_feedback(alert_id: str, verdict: str) -> dict:
+    """Record an analyst verdict (true_positive / false_positive / benign).
+
+    This is the labeled signal for the adaptive-SOC retraining loop.
+    """
+    if verdict not in VERDICTS:
+        raise HTTPException(status_code=422, detail=f"verdict must be one of {sorted(VERDICTS)}")
+    if store.get_alert(alert_id) is None:
+        raise HTTPException(status_code=404, detail="alert not found")
+    store.save_feedback(alert_id, verdict)
+    return {"alert_id": alert_id, "verdict": verdict}
 
 
 @app.get("/alerts/{alert_id}/analysis")
