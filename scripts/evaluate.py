@@ -22,7 +22,7 @@ import pandas as pd
 
 from aisoc.detection.evaluate import evaluate, format_report
 from aisoc.detection.isolation_forest import AnomalyDetector
-from aisoc.features import process_features as pf
+from aisoc.features import combined
 from aisoc.features.windows import label_windows
 from aisoc.ingestion import IndexerClient
 
@@ -48,12 +48,19 @@ def main() -> None:
 
     detector = AnomalyDetector.load(MODEL_PATH)
     client = IndexerClient()
-    events = client.fetch_sysmon_process_events(start.to_pydatetime(), end)
-    if events.empty:
+    proc = client.fetch_sysmon_process_events(start.to_pydatetime(), end)
+    net = client.fetch_sysmon_network_events(start.to_pydatetime(), end)
+    dns = client.fetch_sysmon_dns_events(start.to_pydatetime(), end)
+    pax = client.fetch_sysmon_process_access_events(start.to_pydatetime(), end)
+    reg = client.fetch_sysmon_registry_events(start.to_pydatetime(), end)
+    img = client.fetch_sysmon_image_load_events(start.to_pydatetime(), end)
+    if proc.empty and net.empty:
         raise SystemExit("no Sysmon events in range")
 
-    features = pf.extract(events)
-    features["score"] = detector.score(features[pf.FEATURE_COLUMNS])
+    features = combined.build(
+        proc, net, dns, process_access_events=pax, registry_events=reg, image_load_events=img
+    )
+    features["score"] = detector.score(features[combined.FEATURE_COLUMNS])
     is_attack = label_windows(features, labels)
 
     metrics = evaluate(features["score"], is_attack, threshold_pct=args.pct)

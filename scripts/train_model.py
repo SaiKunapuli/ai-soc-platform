@@ -21,6 +21,7 @@ import pandas as pd
 from aisoc.detection.baseline import BaselineStore
 from aisoc.detection.isolation_forest import AnomalyDetector
 from aisoc.features import combined
+from aisoc.features.process_history import ProcessHistoryStore
 from aisoc.features.windows import label_windows
 from aisoc.ingestion import IndexerClient
 
@@ -38,15 +39,26 @@ def main() -> None:
     start = end - timedelta(days=args.days)
 
     client = IndexerClient()
-    print(f"pulling Sysmon process + network + DNS events since {start.date()} ...")
+    print(f"pulling Sysmon process + network + DNS + auth events since {start.date()} ...")
     proc = client.fetch_sysmon_process_events(start, end)
     net = client.fetch_sysmon_network_events(start, end)
     dns = client.fetch_sysmon_dns_events(start, end)
-    print(f"  {len(proc)} process, {len(net)} network, {len(dns)} DNS events")
+    auth = client.fetch_windows_logon_events(start, end)
+    pax = client.fetch_sysmon_process_access_events(start, end)
+    reg = client.fetch_sysmon_registry_events(start, end)
+    img = client.fetch_sysmon_image_load_events(start, end)
+    print(f"  {len(proc)} process, {len(net)} network, {len(dns)} DNS, {len(auth)} auth, "
+          f"{len(pax)} proc-access, {len(reg)} registry, {len(img)} image-load events")
     if proc.empty and net.empty:
         raise SystemExit("no events — is the agent shipping and archives enabled?")
 
-    features = combined.build(proc, net, dns)
+    proc_history = ProcessHistoryStore()
+    proc_history.reset()  # fresh baseline on retrain
+    features = combined.build(
+        proc, net, dns, auth,
+        process_access_events=pax, registry_events=reg, image_load_events=img,
+        process_history=proc_history,
+    )
     print(f"  {len(features)} (host, window) feature rows x {len(combined.FEATURE_COLUMNS)} features")
 
     # Exclude labeled attack windows so the baseline is clean by construction —

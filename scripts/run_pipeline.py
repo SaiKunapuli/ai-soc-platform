@@ -28,6 +28,7 @@ from aisoc.detection.isolation_forest import AnomalyDetector
 from aisoc.enrichment import alert_fusion as af
 from aisoc.enrichment.schemas import MitreTechnique, MlDetection, RuleAlert
 from aisoc.features import combined
+from aisoc.features.process_history import ProcessHistoryStore
 from aisoc.features.windows import assign_windows
 from aisoc.ingestion import IndexerClient
 
@@ -78,9 +79,18 @@ def main() -> None:
     proc = client.fetch_sysmon_process_events(start, end)
     net = client.fetch_sysmon_network_events(start, end)
     dns = client.fetch_sysmon_dns_events(start, end)
+    auth = client.fetch_windows_logon_events(start, end)
+    pax = client.fetch_sysmon_process_access_events(start, end)
+    reg = client.fetch_sysmon_registry_events(start, end)
+    img = client.fetch_sysmon_image_load_events(start, end)
     if proc.empty and net.empty:
         raise SystemExit("no Sysmon events in range")
-    features = combined.build(proc, net, dns)
+    proc_history = ProcessHistoryStore()
+    features = combined.build(
+        proc, net, dns, auth,
+        process_access_events=pax, registry_events=reg, image_load_events=img,
+        process_history=proc_history,
+    )
     print(f"{len(features)} feature windows over the last {args.hours}h")
 
     # score + per-host baseline percentile against ACCUMULATED history (BaselineStore),
@@ -120,6 +130,9 @@ def main() -> None:
     alerts = af.fuse_stream(records)
     store = AlertStore()
     for a in alerts:
+        # Stable id per (host, window) so re-running the pipeline UPSERTS the same
+        # alert instead of creating a duplicate with a fresh uuid each run.
+        a.alert_id = f"{a.host}:{a.window_start.isoformat()}"
         store.save_alert(a)
 
     print(f"emitted {len(alerts)} EnrichedAlert(s) -> store")
