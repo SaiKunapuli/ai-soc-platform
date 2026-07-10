@@ -18,6 +18,9 @@ models/*.pt
 # Scratch copilot output from comparison runs
 scratch_reports/
 
+# graphify knowledge-graph output (generated, machine-specific)
+graphify-out/
+
 # Notebooks
 .ipynb_checkpoints/
 
@@ -29,3 +32,4 @@ scratch_reports/
 Thumbs.db
 .DS_Store
 .vscode/
+simulations/mordor_labels.csv

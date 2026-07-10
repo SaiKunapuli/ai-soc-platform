@@ -19,7 +19,7 @@ aisoc.detection    Isolation Forest anomaly scoring (autoencoder later)
 aisoc.enrichment   fuse rule alerts + ML scores → EnrichedAlert, MITRE mapping
 aisoc.copilot      local LLM (Ollama): explanation, severity, playbook, report
 aisoc.api          FastAPI backend
-dashboard/         Streamlit v1
+dashboard/         HTML single-page app (vanilla JS)
 ```
 
 Full design docs live in [docs/](docs/) — overview, architecture, roadmap, design decisions.
@@ -66,9 +66,9 @@ Optional extras:
 
 ## Status
 
-- [ ] Phase 1 — lab foundation (Wazuh, Sysmon, Atomic Red Team)
-- [ ] Phase 2 — ML core (process features + Isolation Forest)
-- [ ] Phase 3 — enrichment + MITRE mapping
-- [ ] Phase 4 — LLM copilot (Ollama)
-- [ ] Phase 5 — API + dashboard
+- [x] Phase 1 — lab foundation (Wazuh, Sysmon, Atomic Red Team)
+- [ ] Phase 2 — ML core (process features + Isolation Forest) — wired, pending baseline data
+- [x] Phase 3 — enrichment + MITRE mapping
+- [x] Phase 4 — LLM copilot (Ollama)
+- [x] Phase 5 — API + dashboard (HTML single-page app)
 - [ ] Phase 6 — autoencoder, feedback loop, graph viz
