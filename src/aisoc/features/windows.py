@@ -45,7 +45,11 @@ def label_windows(
     Sysmon/indexing lag lands events slightly AFTER execution, so we pad the end by
     `pad_seconds` but the start by only a small clock-skew tolerance. Padding the
     start backward by a full minute wrongly bleeds a boundary attack into the prior
-    window. Time-overlap only — add host matching when a second endpoint exists.
+    window.
+
+    Host matching: when the labels DataFrame has a ``host`` column, only windows on
+    that host are marked. Without host info, matches on time overlap only (legacy
+    single-host mode).
     """
     window = window_minutes or settings.window_minutes
     window_start = pd.to_datetime(features["window_start"], utc=True)
@@ -53,9 +57,14 @@ def label_windows(
     back_pad = pd.Timedelta(seconds=5)          # clock-skew tolerance only
     fwd_pad = pd.Timedelta(seconds=pad_seconds)  # event/indexing lag
 
+    has_host = "host" in labels.columns and labels["host"].notna().any()
+
     is_attack = pd.Series(False, index=features.index)
     for _, label in labels.iterrows():
         start = pd.to_datetime(label["start_utc"], utc=True) - back_pad
         end = pd.to_datetime(label["end_utc"], utc=True) + fwd_pad
-        is_attack |= (window_start < end) & (window_end > start)
+        overlap = (window_start < end) & (window_end > start)
+        if has_host and "host" in features.columns:
+            overlap &= features["host"].str.lower() == str(label.get("host", "")).lower()
+        is_attack |= overlap
     return is_attack

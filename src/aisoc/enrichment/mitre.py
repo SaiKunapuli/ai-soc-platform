@@ -22,6 +22,21 @@ FEATURE_TECHNIQUE_MAP: dict[str, MitreTechnique] = {
     "new_parent_child": MitreTechnique(
         technique_id="T1055", name="Process Injection", tactic="Defense Evasion"
     ),
+    "lsass_access_count": MitreTechnique(
+        technique_id="T1003.001", name="LSASS Memory", tactic="Credential Access"
+    ),
+    "high_access_count": MitreTechnique(
+        technique_id="T1055", name="Process Injection", tactic="Defense Evasion"
+    ),
+    "sensitive_access_count": MitreTechnique(
+        technique_id="T1003", name="OS Credential Dumping", tactic="Credential Access"
+    ),
+    "autorun_mod_count": MitreTechnique(
+        technique_id="T1547.001", name="Registry Run Keys / Startup Folder", tactic="Persistence"
+    ),
+    "unsigned_load_count": MitreTechnique(
+        technique_id="T1574.002", name="DLL Side-Loading", tactic="Defense Evasion"
+    ),
     "failed_ratio": MitreTechnique(
         technique_id="T1110", name="Brute Force", tactic="Credential Access"
     ),

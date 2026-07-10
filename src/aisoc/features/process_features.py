@@ -18,10 +18,14 @@ entropy and length are strong per-window maxima.
 
 import math
 from collections import Counter
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
 from aisoc.features.windows import assign_windows
+
+if TYPE_CHECKING:
+    from aisoc.features.process_history import ProcessHistoryStore
 
 SCRIPT_HOSTS = {"powershell.exe", "pwsh.exe", "cmd.exe", "wscript.exe", "cscript.exe", "mshta.exe"}
 ENCODED_FLAGS = ("-enc", "-encodedcommand", "-e ")
@@ -55,14 +59,20 @@ def command_line_entropy(cmdline: str) -> float:
     return -sum((c / total) * math.log2(c / total) for c in counts.values())
 
 
-def extract(process_events: pd.DataFrame) -> pd.DataFrame:
+def extract(
+    process_events: pd.DataFrame,
+    history: "ProcessHistoryStore | None" = None,
+) -> pd.DataFrame:
     """Sysmon EID-1 events → one feature row per (host, window).
 
-    Rarity and first-seen are computed within the given batch, so pass baseline
-    history and the scoring period together.
-    TODO(phase 3): back rarity/first-seen with a persistent per-host history store
-    so scoring doesn't need the whole history in memory.
+    When `history` is a ProcessHistoryStore, rarity and first-seen signals are
+    computed against persistent per-host history (accumulated across pipeline runs)
+    rather than just the current batch. Without history, falls back to batch-level
+    computation (the original behaviour).
     """
+    if process_events is None or process_events.empty:
+        return pd.DataFrame(columns=["host", "window_start"] + FEATURE_COLUMNS)
+
     events = assign_windows(process_events).sort_values("timestamp")
     for col in (COL_IMAGE, COL_PARENT, COL_CMDLINE):
         if col not in events:
@@ -80,15 +90,67 @@ def extract(process_events: pd.DataFrame) -> pd.DataFrame:
     )
     events["is_encoded"] = has_flag | (events["cmd_entropy"] > ENTROPY_THRESHOLD)
 
-    # Rarity of an image on its host: ~1 for a singleton, 0 for the host's most common image
-    image_counts = events.groupby([COL_HOST, "image_name"])[COL_HOST].transform("size")
-    host_max = image_counts.groupby(events[COL_HOST]).transform("max")
-    events["rarity"] = 1.0 - image_counts / host_max
+    # Rarity of an image on its host: ~1 for a singleton, 0 for most common.
+    # With history: combines persistent store counts + batch counts.
+    if history is not None:
+        # Build in-memory lookup of historical counts per host
+        hist_counts: dict[str, dict[str, int]] = {}
+        hist_max: dict[str, int] = {}
+        for host in events[COL_HOST].unique():
+            h = str(host)
+            counts = history.host_image_counts(h)
+            hist_counts[h] = counts
+            hist_max[h] = max(counts.values()) if counts else 0
 
-    # First occurrence of a (parent, child) pair on this host (events are time-sorted)
-    events["is_new_pair"] = (
-        events.groupby([COL_HOST, "parent_name", "image_name"]).cumcount() == 0
-    )
+        def _rarity(row) -> float:
+            h = str(row[COL_HOST])
+            img = str(row["image_name"])
+            hist = hist_counts.get(h, {}).get(img, 0)
+            # Batch count for this image on this host (computed via groupby below)
+            batch = int(row["_batch_count"])
+            total = hist + batch
+            host_max = max(hist_max.get(h, 0), int(row["_batch_max"]))
+            if host_max == 0:
+                return 0.0
+            return 1.0 - total / host_max
+
+        # Pre-load known pairs per host into a set for O(1) lookup (avoid
+        # per-row SQL queries when the batch has thousands of events).
+        known_pairs: dict[str, set[tuple[str, str]]] = {}
+        for host in events[COL_HOST].unique():
+            known_pairs[str(host)] = history.host_known_pairs(str(host))
+
+        def _is_new(row) -> bool:
+            h = str(row[COL_HOST])
+            parent = str(row["parent_name"])
+            child = str(row["image_name"])
+            batch_first = bool(row["_batch_first"])
+            # New pair = never seen in history AND first occurrence in this batch
+            return batch_first and (parent, child) not in known_pairs.get(h, set())
+
+        # Compute batch-level aggregates needed for rarity + new_pair
+        events["_batch_count"] = events.groupby(
+            [COL_HOST, "image_name"]
+        )[COL_HOST].transform("size")
+        batch_max = events.groupby(COL_HOST)["_batch_count"].transform("max")
+        events["_batch_max"] = batch_max
+        # Batch-first: first occurrence of a pair within this batch
+        events["_batch_first"] = (
+            events.groupby([COL_HOST, "parent_name", "image_name"]).cumcount() == 0
+        )
+
+        events["rarity"] = events.apply(_rarity, axis=1)
+        events["is_new_pair"] = events.apply(_is_new, axis=1)
+        # Clean up temporary columns
+        events = events.drop(columns=["_batch_count", "_batch_max", "_batch_first"])
+    else:
+        # Batch-only mode (original)
+        image_counts = events.groupby([COL_HOST, "image_name"])[COL_HOST].transform("size")
+        host_max = image_counts.groupby(events[COL_HOST]).transform("max")
+        events["rarity"] = 1.0 - image_counts / host_max
+        events["is_new_pair"] = (
+            events.groupby([COL_HOST, "parent_name", "image_name"]).cumcount() == 0
+        )
 
     events["minute"] = events["timestamp"].dt.floor("1min")
     per_minute = events.groupby([COL_HOST, "window_start", "minute"]).size()
