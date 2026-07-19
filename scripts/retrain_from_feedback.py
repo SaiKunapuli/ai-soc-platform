@@ -75,10 +75,10 @@ def _print_summary(
     fp = sum(1 for v in feedback.values() if v == "false_positive")
     bn = sum(1 for v in feedback.values() if v == "benign")
 
-    tag = " [DRY RUN — model NOT saved]" if dry_run else ""
-    print(f"\n{'─' * 56}")
+    tag = " [DRY RUN -- model NOT saved]" if dry_run else ""
+    print(f"\n{'=' * 56}")
     print(f"Adaptive Retrain Report{tag}")
-    print(f"{'─' * 56}")
+    print(f"{'=' * 56}")
     print(f"  Analyst feedback:    {len(feedback)} verdicts ({tp} TP, {fp} FP, {bn} benign)")
     print(f"  Attack labels:       {len(labels)} windows in labels.csv")
     print(f"  Feedback exclusions: {len(fb_exclusions)} windows from TP verdicts")

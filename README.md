@@ -40,8 +40,9 @@ tests/            pytest suite
 
 Requires Python 3.11+.
 
-> **OneDrive note:** this repo lives inside a OneDrive-synced folder. Create the
-> virtualenv OUTSIDE OneDrive to avoid sync churn and file-locking pain, e.g.:
+> The repo's home is `C:\Projects\SOC\ai-soc-platform` (moved out of OneDrive
+> on 2025-07-19; see `docs/03-design-decisions.md` #4). The venv still goes
+> OUTSIDE OneDrive as a general rule, e.g.:
 >
 > ```powershell
 > python -m venv $env:LOCALAPPDATA\venvs\aisoc

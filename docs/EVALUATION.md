@@ -9,7 +9,7 @@ end up overclaiming.
 | What it measures | Do our sensors + features produce a signal on the attack? | Does the anomaly score rank the attack above normal activity? |
 | Bounded by | Telemetry breadth + feature engineering | Quality of the learned per-host baseline |
 | Evaluated with | **Mordor / OTRF Security-Datasets** (this doc) | **Live baseline** on the monitored host (accumulating) |
-| Status | ✅ measured, strong | ⏳ pending a clean ~1-week baseline |
+| Status | ✅ measured, strong | ⏳ first real number via `scorecard.py`; trustworthy number pending live-host attacks |
 
 You cannot detect what you cannot see, so **coverage is the prerequisite**. This
 document reports the coverage result; the detection-quality half depends on the live

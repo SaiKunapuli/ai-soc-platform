@@ -33,3 +33,6 @@ src = ["src", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Put the repo root on sys.path so tests can `from scripts.X import ...`.
+# scripts/ is not an installed package, and a clean CI install only exposes src/.
+pythonpath = ["."]

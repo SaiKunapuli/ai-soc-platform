@@ -4,9 +4,11 @@ import re
 
 from aisoc.copilot import prompts
 from aisoc.copilot.llm import LLMClient
+from aisoc.enrichment import context
 from aisoc.enrichment.schemas import CopilotAnalysis, EnrichedAlert
 
 _EXE_RE = re.compile(r"[\w.-]+\.exe", re.IGNORECASE)
+_IP_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
 
 def analyze(alert: EnrichedAlert, llm: LLMClient | None = None) -> CopilotAnalysis:
@@ -18,6 +20,7 @@ def analyze(alert: EnrichedAlert, llm: LLMClient | None = None) -> CopilotAnalys
             alert_json=alert.model_dump_json(indent=2),
             fusion_severity=(alert.severity.value if alert.severity else "unknown"),
             ml_interpretation=_interpret_ml(alert),
+            context=_interpret_context(alert),
         ),
         schema=CopilotAnalysis.model_json_schema(),
     )
@@ -87,6 +90,19 @@ def _interpret_ml(alert: EnrichedAlert) -> str:
             "some legitimate installers and management scripts."
         )
     return "\n".join(lines)
+
+
+def _interpret_context(alert: EnrichedAlert) -> str:
+    """Automated name/IP enrichment (known-good tools, LOLBins, TI hits).
+
+    Names and IPs are pulled from the behavior summary and rule descriptions —
+    the only free text on the alert that carries observables. This grounds the
+    model with lookups it would otherwise have to guess at.
+    """
+    text = " ".join([alert.detected_behavior, *(ra.description for ra in alert.rule_alerts)])
+    names = _EXE_RE.findall(text)
+    ips = _IP_RE.findall(text)
+    return context.format_context(context.build_context(names, ips=ips))
 
 
 def _alert_iocs(alert: EnrichedAlert) -> list[str]:

@@ -252,8 +252,12 @@ def _collect_json_files(data_dir: Path, scenario_filter: str | None) -> list[Pat
 def _build_labels(json_files: list[Path], data_dir: Path) -> pd.DataFrame:
     """Create labels.csv entries from Mordor scenario metadata.
 
-    Each JSON file or its enclosing directory represents one MITRE technique.
-    We create a label window spanning the min/max timestamp in that file.
+    Each JSON file represents one MITRE technique capture. We span the min/max
+    event timestamp and tag the window with the host that produced most of the
+    events (the monitored victim). The feature windows are grouped by that same
+    Sysmon Hostname, so the label host MUST come from the events too — tagging it
+    with the directory name (as an earlier version did) means label_windows never
+    matches and every attack silently scores as benign.
     """
     rows = []
     for path in json_files:
@@ -262,23 +266,25 @@ def _build_labels(json_files: list[Path], data_dir: Path) -> pd.DataFrame:
             continue
         technique = _extract_technique_from_path(path, data_dir)
         timestamps = []
+        hosts: list[str] = []
         for e in events:
             ts = e.get("UtcTime") or e.get("@timestamp")
-            if ts:
-                try:
-                    timestamps.append(pd.to_datetime(ts, utc=True))
-                except Exception:
-                    pass
+            if not ts:
+                continue
+            try:
+                timestamps.append(pd.to_datetime(ts, utc=True))
+            except Exception:
+                continue
+            hosts.append(_host_for_event(e))
         if not timestamps:
             continue
-        t_min = min(timestamps)
-        t_max = max(timestamps)
+        host = max(set(hosts), key=hosts.count) if hosts else "mordor-host"
         # Add padding so label_windows catches the full attack window
         rows.append(
             {
-                "start_utc": (t_min - timedelta(seconds=30)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "end_utc": (t_max + timedelta(seconds=90)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "host": path.parent.name if path.parent.name != "host" else "mordor-host",
+                "start_utc": (min(timestamps) - timedelta(seconds=30)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "end_utc": (max(timestamps) + timedelta(seconds=90)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "host": host,
                 "technique_id": technique or "MORDOR",
                 "test_number": 0,
                 "notes": f"Mordor scenario: {path.stem}",

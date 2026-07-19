@@ -48,6 +48,9 @@ coherent attack - if you cannot, do not raise it.
 ML interpretation (already disambiguated - trust this over the raw rule text):
 {ml_interpretation}
 
+Enrichment context (automated lookups on the observed names/IPs):
+{context}
+
 Severity rubric (prefer the lower option when uncertain):
 - low: benign, or fully explainable by normal activity / a recognizable legitimate tool
 - medium: genuinely unusual but weak or single-signal; monitor and verify, do not page

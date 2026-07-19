@@ -160,6 +160,19 @@ class TestBuildLabels:
         labels = _build_labels([p], tmp_path)
         assert labels.empty
 
+    def test_label_host_comes_from_events_not_dirname(self, tmp_path):
+        # regression: labels must be tagged with the Sysmon Hostname (which the
+        # feature windows are keyed by), NOT the directory name — otherwise
+        # label_windows never matches and every attack scores as benign.
+        p = _make_mordor_json(tmp_path, "t1003_scenario.json", [
+            {"EventID": 10, "Hostname": "VICTIM-PC", "UtcTime": "2020-01-01T10:00:00Z"},
+            {"EventID": 10, "Hostname": "VICTIM-PC", "UtcTime": "2020-01-01T10:01:00Z"},
+            {"EventID": 10, "Hostname": "OTHER-PC", "UtcTime": "2020-01-01T10:02:00Z"},
+        ])
+        labels = _build_labels([p], tmp_path)
+        assert labels["host"].iloc[0] == "VICTIM-PC"  # most frequent host wins
+        assert labels["host"].iloc[0] != tmp_path.name
+
 
 class TestCollectFiles:
     def test_finds_json_files_recursively(self, tmp_path):
